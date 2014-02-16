@@ -28,6 +28,7 @@ module Test.Hspec (
 , before
 , beforeWith
 , beforeAll
+, beforeAllWith
 , after
 , after_
 , afterAll
@@ -118,6 +119,15 @@ memoize mvar action = modifyMVar mvar $ \ma -> case ma of
   Nothing -> do
     a <- action
     return (Just a, a)
+
+-- | Run a custom action before all spec items.
+beforeAllWith :: (b -> IO a) -> SpecWith a -> SpecWith b
+beforeAllWith action = fromSpecList . return . BuildSpecs . go
+  where
+    go spec = do
+      mvar <- newMVar Nothing
+      let action_ = memoize mvar . action
+      runSpecM $ aroundWith (\e x -> action_ x >>= e) spec
 
 -- | Run a custom action after every spec item.
 after :: ActionWith a -> SpecWith a -> SpecWith a
