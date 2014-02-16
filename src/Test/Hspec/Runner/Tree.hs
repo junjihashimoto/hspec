@@ -10,10 +10,10 @@ data Tree a
   | Leaf !String a
   deriving Functor
 
-toTree :: Spec -> IO [Tree Item]
+toTree :: SpecWith a -> IO [Tree (Item a)]
 toTree spec = concat <$> (runSpecM spec >>= mapM go)
   where
-    go :: SpecTree -> IO [Tree Item]
+    go :: SpecTree a -> IO [Tree (Item a)]
     go x = case x of
       SpecGroup label xs -> return . Node label . concat <$> mapM go xs
       BuildSpecs xs -> concat <$> (xs >>= mapM go)

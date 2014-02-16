@@ -67,13 +67,14 @@ filterSpecs c = go []
       Node group specs -> goSpecs (groups ++ [group]) specs (Node group)
       NodeWithCleanup action specs -> goSpecs groups specs (NodeWithCleanup action)
 
-applyDryRun :: Config -> [Tree Item] -> [Tree Item]
+applyDryRun :: Config -> [Tree (Item ())] -> [Tree (Item ())]
 applyDryRun c
   | configDryRun c = map (fmap markSuccess)
   | otherwise = id
   where
-    markSuccess :: Item -> Item
+    markSuccess :: Item () -> Item ()
     markSuccess item = item {itemExample = evaluateExample Success}
+
 
 -- | Run given spec and write a report to `stdout`.
 -- Exit with `exitFailure` if at least one spec item fails.
