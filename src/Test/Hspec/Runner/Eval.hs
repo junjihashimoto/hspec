@@ -18,28 +18,29 @@ import           Test.Hspec.Formatters.Internal
 import           Test.Hspec.Timer
 import           Data.Time.Clock.POSIX
 
-type EvalTree = Tree (ProgressCallback -> FormatResult -> IO (FormatM ()))
+type EvalTree = Tree (Maybe Location, ProgressCallback -> FormatResult -> IO (FormatM ()))
 
 -- | Evaluate all examples of a given spec and produce a report.
 runFormatter :: Bool -> Handle -> Config -> Formatter -> [Tree Item] -> FormatM ()
-runFormatter useColor h c formatter specs_ = do
+runFormatter useColor h c formatter specs = do
   headerFormatter formatter
   chan <- liftIO newChan
   reportProgress <- liftIO mkReportProgress
-  run chan reportProgress c formatter specs
+  run chan reportProgress c formatter (toEvalTree specs)
   where
     mkReportProgress :: IO (Path -> Progress -> IO ())
     mkReportProgress
       | useColor = every 0.05 $ exampleProgress formatter h
       | otherwise = return $ \_ _ -> return ()
 
-    specs :: [Tree (ProgressCallback -> FormatResult -> IO (FormatM ()))]
-    specs = map (fmap (parallelize . unwrapItem)) specs_
-
-    unwrapItem :: Item -> (Bool, ProgressCallback -> IO Result)
-    unwrapItem (Item isParallelizable e) = (isParallelizable, e params id)
+    toEvalTree :: [Tree Item] -> [EvalTree]
+    toEvalTree = map (fmap f)
       where
-        params = Params (configQuickCheckArgs c) (configSmallCheckDepth c)
+        f :: Item -> (Maybe Location, ProgressCallback -> FormatResult -> IO (FormatM ()))
+        f (Item loc isParallelizable e) = (loc, parallelize isParallelizable $ e params id)
+
+    params :: Params
+    params = Params (configQuickCheckArgs c) (configSmallCheckDepth c)
 
 -- | Execute given action at most every specified number of seconds.
 every :: POSIXTime -> (a -> b -> IO ()) -> IO (a -> b -> IO ())
@@ -51,8 +52,8 @@ every seconds action = do
 
 type FormatResult = Either E.SomeException Result -> FormatM ()
 
-parallelize :: (Bool, ProgressCallback -> IO Result) -> ProgressCallback -> FormatResult -> IO (FormatM ())
-parallelize (isParallelizable, e)
+parallelize :: Bool -> (ProgressCallback -> IO Result) -> ProgressCallback -> FormatResult -> IO (FormatM ())
+parallelize isParallelizable e
   | isParallelizable = runParallel e
   | otherwise = runSequentially e
 
@@ -102,7 +103,7 @@ run chan reportProgress_ c formatter specs = do
     runCleanup :: IO () -> Path -> FormatM ()
     runCleanup action path = do
       r <- liftIO $ safeTry action
-      either (failed path . Left) return r
+      either (failed Nothing path . Left) return r
 
     queueSpec :: [String] -> EvalTree -> IO ()
     queueSpec rGroups (Node group xs) = do
@@ -115,8 +116,8 @@ run chan reportProgress_ c formatter specs = do
     queueSpec rGroups (Leaf requirement e) =
       queueExample (reverse rGroups, requirement) e
 
-    queueExample :: Path -> (ProgressCallback -> FormatResult -> IO (FormatM ())) -> IO ()
-    queueExample path e = e reportProgress formatResult >>= defer
+    queueExample :: Path -> (Maybe Location, ProgressCallback -> FormatResult -> IO (FormatM ())) -> IO ()
+    queueExample path (loc, e) = e reportProgress formatResult >>= defer
       where
         reportProgress = reportProgress_ path
 
@@ -129,12 +130,12 @@ run chan reportProgress_ c formatter specs = do
             Right (Pending reason) -> do
               increasePendingCount
               examplePending formatter path reason
-            Right (Fail err) -> failed path (Right err)
-            Left err         -> failed path (Left  err)
+            Right (Fail err) -> failed loc path (Right err)
+            Left err         -> failed loc path (Left  err)
 
-    failed path err = do
+    failed loc path err = do
       increaseFailCount
-      addFailMessage path err
+      addFailMessage loc path err
       exampleFailed formatter path err
 
 processMessages :: IO Message -> Bool -> FormatM ()
