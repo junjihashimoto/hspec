@@ -22,6 +22,7 @@ module Test.Hspec.Core (
 , Item (..)
 , ActionWith
 , mapSpecItem
+, mapSpecItem_
 , modifyParams
 , describe
 , it
@@ -30,4 +31,4 @@ module Test.Hspec.Core (
 import           Test.Hspec.Core.Type
 
 modifyParams :: (Params -> Params) -> SpecWith a -> SpecWith a
-modifyParams f = mapSpecItem $ \item -> item {itemExample = \p -> (itemExample item) (f p)}
+modifyParams f = mapSpecItem_ $ \item -> item {itemExample = \p -> (itemExample item) (f p)}

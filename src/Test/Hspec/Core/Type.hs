@@ -9,6 +9,7 @@ module Test.Hspec.Core.Type (
 , Item (..)
 , ActionWith
 , mapSpecItem
+, mapSpecItem_
 , Example (..)
 , Result (..)
 , Params (..)
@@ -96,7 +97,7 @@ data Params = Params {
 data SpecTree a =
     SpecGroup String [SpecTree a]
   | BuildSpecs (IO [SpecTree a])
-  | SpecWithCleanup (IO ()) (SpecTree a)
+  | SpecWithCleanup (ActionWith a) (SpecTree a)
   | SpecItem String (Item a)
 
 data Item a = Item {
@@ -107,14 +108,17 @@ data Item a = Item {
 -- | An `IO` action that expects an argument of type @a@.
 type ActionWith a = a -> IO ()
 
-mapSpecItem :: (Item a -> Item b) -> SpecWith a -> SpecWith b
-mapSpecItem f = fromSpecList . return . BuildSpecs . fmap (map go) . runSpecM
+mapSpecItem :: (ActionWith a -> ActionWith b) -> (Item a -> Item b) -> SpecWith a -> SpecWith b
+mapSpecItem g f = fromSpecList . return . BuildSpecs . fmap (map go) . runSpecM
   where
     go spec = case spec of
       SpecGroup d es -> SpecGroup d (map go es)
       BuildSpecs es -> BuildSpecs (map go <$> es)
-      SpecWithCleanup cleanup e -> SpecWithCleanup cleanup (go e)
+      SpecWithCleanup cleanup e -> SpecWithCleanup (g cleanup) (go e)
       SpecItem r item -> SpecItem r (f item)
+
+mapSpecItem_ :: (Item a -> Item a) -> SpecWith a -> SpecWith a
+mapSpecItem_ = mapSpecItem id
 
 -- | The @describe@ function combines a list of specs into a larger spec.
 describe :: String -> [SpecTree a] -> SpecTree a
