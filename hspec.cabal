@@ -66,10 +66,10 @@ Library
       Test.Hspec.Formatters
       Test.Hspec.HUnit
       Test.Hspec.QuickCheck
+      Test.Hspec.Core.Type
   other-modules:
       Test.Hspec.Util
       Test.Hspec.Compat
-      Test.Hspec.Core.Type
       Test.Hspec.Core.QuickCheckUtil
       Test.Hspec.Config
       Test.Hspec.Options
